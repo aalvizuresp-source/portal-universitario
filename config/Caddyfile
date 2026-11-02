@@ -1,0 +1,40 @@
+# ============================================================================
+#  Caddyfile — LabSeguridad  (se USA en la ETAPA 2)
+# ----------------------------------------------------------------------------
+#  Este archivo se incluye desde la ETAPA 1 como referencia, pero la
+#  configuración de HTTPS/TLS, la CA local, el firewall y el acceso desde la red
+#  autorizada se DOCUMENTAN Y VERIFICAN en la ETAPA 2.
+#
+#  Papel de Caddy: proxy inverso que ofrece HTTPS local hacia el backend PHP,
+#  que SIEMPRE escucha sólo en 127.0.0.1:8000.
+#
+#  Arranque (ETAPA 2, PowerShell, desde la carpeta config/):
+#      caddy run --config .\Caddyfile
+# ============================================================================
+
+# --- Acceso local por HTTPS (certificado de la CA interna de Caddy) ---
+https://localhost {
+    # El backend PHP escucha sólo en loopback; Caddy le pasa las peticiones.
+    reverse_proxy 127.0.0.1:8000
+
+    # Cabeceras de seguridad (se afinan en la ETAPA 2).
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+    }
+}
+
+# --- Acceso OPCIONAL desde un equipo autorizado de la red local (ETAPA 2) ---
+# Reemplace 192.168.1.50 por la IP de ESTE equipo (obténgala con  ipconfig ).
+# Descomente este bloque sólo en la ETAPA 2 y tras configurar el firewall.
+#
+# https://192.168.1.50 {
+#     reverse_proxy 127.0.0.1:8000
+#     @autorizados remote_ip 192.168.1.0/24
+#     handle @autorizados {
+#         reverse_proxy 127.0.0.1:8000
+#     }
+#     respond "Acceso restringido al laboratorio" 403
+# }

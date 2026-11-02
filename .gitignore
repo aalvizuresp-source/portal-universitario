@@ -1,0 +1,47 @@
+# ============================================================================
+#  .gitignore — LabSeguridad
+# ----------------------------------------------------------------------------
+#  Se ignoran artefactos generados en tiempo de ejecución, PERO NO el archivo
+#  src/config/config.php (ETAPA 1 contiene a propósito un secreto ficticio que
+#  Gitleaks debe poder encontrar en el historial).
+# ============================================================================
+
+# Base de datos SQLite (se regenera con los scripts)
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+
+# Artefactos de almacenamiento (se conservan las carpetas con .gitkeep)
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/reports/*
+!storage/reports/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+
+# Claves criptográficas (ETAPA 2) — NUNCA versionar
+storage/keys/*
+!storage/keys/.gitkeep
+
+# Repositorio independiente de la demo de Gitleaks (se crea al ejecutarla)
+storage/gitleaks_demo/
+
+# Claves criptográficas (ETAPA 2) — NUNCA subir la clave de cifrado
+storage/keys/*
+!storage/keys/.gitkeep
+
+# Certificados y datos locales de Caddy (ETAPA 2) — nunca subir claves TLS
+caddy_data/
+caddy_config/
+*.pem
+*.key
+
+# Archivo de variables de entorno (ETAPA 2) — nunca subir secretos reales
+.env
+*.env
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
