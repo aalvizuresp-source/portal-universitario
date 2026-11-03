@@ -1,6 +1,11 @@
 <?php
 /**
- * AuthController — registro, inicio y cierre de sesión, perfil y cambio de contraseña.
+ * AuthController — registro, login, logout, perfil, cambio de contraseña.
+ *
+ * - Contraseñas con password_hash()/password_verify() y migración automática
+ *   de hashes heredados del sistema anterior.
+ * - Regeneración del ID de sesión al autenticar y límite de intentos fallidos.
+ * - Los registros de autenticación nunca incluyen contraseñas.
  */
 
 declare(strict_types=1);
@@ -16,28 +21,96 @@ final class AuthController
 
     public function procesarLogin(): void
     {
-        $username = (string)post('username', '');
+        $username = trim((string)post('username', ''));
         $password = (string)post('password', '');
 
         $user = UserModel::porUsername($username);
 
-        if ($user && (int)$user['activo'] === 1
-            && lab_verificar_password($password, $user['password_hash'])) {
+        // --- Límite de intentos (rate limiting) ---
+        if ($user && self::estaBloqueado($user)) {
+            registrar_evento('LOGIN_BLOCKED',
+                "Cuenta temporalmente bloqueada por intentos fallidos: {$username}",
+                'DENEGADO', (int)$user['id']);
+            flash('error', 'Demasiados intentos fallidos. Intente de nuevo en unos minutos.');
+            redirigir(url('login'));
+        }
 
+        $credencialesOk = $user
+            && (int)$user['activo'] === 1
+            && self::verificarPassword($password, $user);
+
+        if ($credencialesOk) {
+            // Nuevo ID de sesión al autenticar (evita la fijación de sesión).
+            session_regenerate_id(true);
             establecer_usuario($user);
+            UserModel::reiniciarIntentos((int)$user['id']);
             registrar_evento('LOGIN_OK', "Ingreso exitoso de {$username}", 'OK', (int)$user['id']);
             redirigir(url('dashboard'));
         }
 
+        // Se registra el intento sin la contraseña.
+        if ($user) {
+            UserModel::incrementarIntentos((int)$user['id']);
+        }
         registrar_evento(
             'LOGIN_FAIL',
-            "Intento fallido. usuario='{$username}' password='{$password}'",
+            "Intento de inicio de sesión fallido para el usuario '{$username}'",
             'ERROR',
             $user['id'] ?? null
         );
 
         flash('error', 'Usuario o contraseña incorrectos.');
         redirigir(url('login'));
+    }
+
+    /**
+     * Verifica la contraseña. Si el hash almacenado es del formato heredado,
+     * lo migra a password_hash() tras una verificación correcta.
+     */
+    private static function verificarPassword(string $password, array $user): bool
+    {
+        $hash = $user['password_hash'];
+
+        // Hash heredado: verificar y reemplazar por uno moderno.
+        if (lab_es_hash_legado($hash)) {
+            if (lab_verificar_hash_legado($password, $hash)) {
+                UserModel::cambiarPassword((int)$user['id'], lab_hash_password($password));
+                registrar_evento('PASSWORD_MIGRATE',
+                    "Hash de contraseña actualizado para {$user['username']}",
+                    'OK', (int)$user['id']);
+                return true;
+            }
+            return false;
+        }
+
+        // Hash moderno: se vuelve a generar si cambiaron los parámetros de coste.
+        if (lab_verificar_password($password, $hash)) {
+            if (password_needs_rehash($hash, lab_algoritmo_password())) {
+                UserModel::cambiarPassword((int)$user['id'], lab_hash_password($password));
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private static function estaBloqueado(array $user): bool
+    {
+        if ((int)$user['failed_attempts'] < MAX_INTENTOS_LOGIN) {
+            return false;
+        }
+        $hasta = $user['locked_until'] ?? null;
+        if ($hasta === null) {
+            // Marcar el bloqueo a partir de ahora.
+            UserModel::bloquearHasta((int)$user['id'],
+                date('Y-m-d H:i:s', time() + BLOQUEO_LOGIN_SEGUNDOS));
+            return true;
+        }
+        if (strtotime($hasta) > time()) {
+            return true;
+        }
+        // El bloqueo expiró: reiniciar contador.
+        UserModel::reiniciarIntentos((int)$user['id']);
+        return false;
     }
 
     public function logout(): void
@@ -57,15 +130,22 @@ final class AuthController
 
     public function procesarRegistro(): void
     {
-        $username = (string)post('username', '');
+        $username = trim((string)post('username', ''));
         $nombre   = (string)post('nombre_completo', '');
-        $email    = (string)post('email', '');
         $password = (string)post('password', '');
 
-        // Sólo se comprueba que no estén vacíos y que el usuario no exista.
-        // NO se valida formato de email, longitud ni complejidad de contraseña.
-        if ($username === '' || $nombre === '' || $email === '' || $password === '') {
-            flash('error', 'Complete todos los campos.');
+        $v = new Validador();
+        $email  = $v->email((string)post('email', ''));
+        $nombre = $v->nombre($nombre, 'nombre completo');
+
+        if (!preg_match('/^[A-Za-z0-9_.-]{3,30}$/', $username)) {
+            $v->errores[] = 'El usuario debe tener 3–30 caracteres (letras, números, . _ -).';
+        }
+        if (mb_strlen($password) < 8) {
+            $v->errores[] = 'La contraseña debe tener al menos 8 caracteres.';
+        }
+        if (!$v->ok()) {
+            flash('error', $v->primerError());
             redirigir(url('register'));
         }
         if (UserModel::existeUsername($username)) {
@@ -73,7 +153,6 @@ final class AuthController
             redirigir(url('register'));
         }
 
-        // Rol por defecto: estudiante (id del rol se obtiene por nombre).
         $roles = [];
         foreach (UserModel::roles() as $r) { $roles[$r['nombre']] = (int)$r['id']; }
 
@@ -108,12 +187,12 @@ final class AuthController
 
         $user = UserModel::porId(id_usuario_actual());
 
-        if (!lab_verificar_password($actual, $user['password_hash'])) {
+        if (!self::verificarPassword($actual, $user)) {
             flash('error', 'La contraseña actual no es correcta.');
             redirigir(url('profile'));
         }
-        if ($nueva === '') {
-            flash('error', 'La nueva contraseña no puede estar vacía.');
+        if (mb_strlen($nueva) < 8) {
+            flash('error', 'La nueva contraseña debe tener al menos 8 caracteres.');
             redirigir(url('profile'));
         }
 

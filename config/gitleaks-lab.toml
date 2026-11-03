@@ -1,0 +1,47 @@
+# ============================================================================
+#  gitleaks-lab.toml — Regla personalizada de Gitleaks para el laboratorio
+# ----------------------------------------------------------------------------
+#  DEMOSTRACIÓN: esta regla detecta el formato ficticio de clave que usa el
+#  laboratorio (sk_lab_<32 hex>). Se incluye por si las reglas por defecto de
+#  Gitleaks no marcaran ese patrón concreto.
+#
+#  Uso (PowerShell):
+#      gitleaks detect --source . --config config\gitleaks-lab.toml `
+#          --report-path storage\reports\gitleaks_lab.json --verbose
+#
+#  [extend] hereda las reglas por defecto de Gitleaks y añade la nuestra.
+# ============================================================================
+
+title = "Reglas LabSeguridad (demostración)"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "lab-secret-key"
+description = "Clave de laboratorio ficticia (formato sk_lab_<hex>)"
+# Detecta sk_lab_ seguido de 32 caracteres hexadecimales.
+regex = '''sk_lab_[0-9a-f]{32}'''
+keywords = ["sk_lab_"]
+
+[[rules]]
+id = "lab-demo-db-password"
+description = "Contraseña de BD ficticia del laboratorio"
+regex = '''DB_PASSWORD['"]?\s*[,=:]\s*['"][^'"]{6,}['"]'''
+keywords = ["DB_PASSWORD"]
+
+# ----------------------------------------------------------------------------
+# Lista de exclusión (allowlist) — DOCUMENTADA
+# ----------------------------------------------------------------------------
+# Estos archivos contienen la clave ficticia A PROPÓSITO, como datos de prueba
+# (los tests la buscan, el script de demo la fabrica y la guía la menciona).
+# No son fugas reales, por eso se excluyen. El archivo de configuración de la
+# aplicación (src/config/config.php) NO se excluye: si el secreto vuelve a
+# aparecer ahí, Gitleaks lo reportará.
+[allowlist]
+description = "Datos de prueba intencionales del laboratorio"
+paths = [
+    '''^tests/''',
+    '''^scripts/gitleaks_demo\.ps1$''',
+    '''^docs/''',
+]

@@ -1,16 +1,18 @@
 <?php
 /**
- * StudentController — administración y búsqueda de estudiantes.
+ * StudentController — administración de estudiantes (sólo administrador).
+ *
+ * Listado con paginación, búsqueda por carné/nombre/apellido/carrera y CRUD.
+ * Los docentes consultan a sus estudiantes desde Expedientes y Cursos.
  */
 
 declare(strict_types=1);
 
 final class StudentController
 {
-    /* ---------------- Listado + paginación ---------------- */
     public function index(): void
     {
-        requerir_rol(['admin', 'docente']);
+        requerir_rol(['admin']);
 
         $pagina = max(1, (int)get('page', 1));
         $total  = StudentModel::contar();
@@ -28,16 +30,16 @@ final class StudentController
         ]);
     }
 
-    /* ---------------- Búsqueda ---------------- */
     public function buscar(): void
     {
-        requerir_rol(['admin', 'docente']);
+        requerir_rol(['admin']);
 
-        $termino = (string)get('q', '');
+        $v = new Validador();
+        $termino = $v->busqueda((string)get('q', ''));
 
         $estudiantes = StudentModel::buscar($termino);
 
-        registrar_evento('STUDENT_SEARCH', "Búsqueda de estudiantes: '{$termino}'", 'OK');
+        registrar_evento('STUDENT_SEARCH', 'Búsqueda de estudiantes', 'OK');
 
         render_vista('students/index', [
             'titulo_pagina' => 'Estudiantes · Resultados de búsqueda',
@@ -49,7 +51,6 @@ final class StudentController
         ]);
     }
 
-    /* ---------------- Alta ---------------- */
     public function nuevo(): void
     {
         requerir_rol(['admin']);
@@ -65,20 +66,8 @@ final class StudentController
     {
         requerir_rol(['admin']);
 
-        // Se toman los datos tal cual, sin validar formato ni rangos.
-        $d = [
-            'carne'               => (string)post('carne', ''),
-            'nombres'             => (string)post('nombres', ''),
-            'apellidos'           => (string)post('apellidos', ''),
-            'email'               => (string)post('email', ''),
-            'fecha_nacimiento'    => (string)post('fecha_nacimiento', ''),
-            'career_id'           => post('career_id') ?: null,
-            'estado'              => (string)post('estado', 'activo'),
-            'telefono_emergencia' => (string)post('telefono_emergencia', ''),
-        ];
-
-        if ($d['carne'] === '' || $d['nombres'] === '' || $d['apellidos'] === '') {
-            flash('error', 'Carné, nombres y apellidos son obligatorios.');
+        $d = $this->validarEntradaEstudiante();
+        if ($d === null) {
             redirigir(url('students/new'));
         }
         if (StudentModel::porCarne($d['carne'])) {
@@ -87,30 +76,28 @@ final class StudentController
         }
 
         $id = StudentModel::crear($d);
-        registrar_evento('STUDENT_CREATE', "Alta de estudiante {$d['carne']} (id=$id)", 'OK');
+        registrar_evento('STUDENT_CREATE', "Alta de estudiante id=$id", 'OK');
         flash('ok', 'Estudiante registrado correctamente.');
         redirigir(url('students'));
     }
 
-    /* ---------------- Ver ---------------- */
     public function ver(): void
     {
-        requerir_rol(['admin', 'docente']);
+        requerir_rol(['admin']);
         $id = (int)get('id', 0);
         $estudiante = StudentModel::porId($id);
         if (!$estudiante) {
             flash('error', 'Estudiante no encontrado.');
             redirigir(url('students'));
         }
-        $expediente = AcademicModel::expedienteDe($id);
+        registrar_evento('STUDENT_VIEW', "Consulta de ficha id=$id", 'OK');
         render_vista('students/ver', [
             'titulo_pagina' => 'Ficha de estudiante',
             'estudiante'    => $estudiante,
-            'expediente'    => $expediente,
+            'expediente'    => AcademicModel::expedienteDe($id),
         ]);
     }
 
-    /* ---------------- Editar ---------------- */
     public function editar(): void
     {
         requerir_rol(['admin']);
@@ -136,16 +123,15 @@ final class StudentController
             flash('error', 'Estudiante no encontrado.');
             redirigir(url('students'));
         }
-        $d = [
-            'carne'               => (string)post('carne', ''),
-            'nombres'             => (string)post('nombres', ''),
-            'apellidos'           => (string)post('apellidos', ''),
-            'email'               => (string)post('email', ''),
-            'fecha_nacimiento'    => (string)post('fecha_nacimiento', ''),
-            'career_id'           => post('career_id') ?: null,
-            'estado'              => (string)post('estado', 'activo'),
-            'telefono_emergencia' => (string)post('telefono_emergencia', ''),
-        ];
+        $d = $this->validarEntradaEstudiante();
+        if ($d === null) {
+            redirigir(url('students/edit') . '&id=' . $id);
+        }
+        $otro = StudentModel::porCarne($d['carne']);
+        if ($otro && (int)$otro['id'] !== $id) {
+            flash('error', 'Ya existe otro estudiante con ese carné.');
+            redirigir(url('students/edit') . '&id=' . $id);
+        }
         StudentModel::actualizar($id, $d);
         registrar_evento('STUDENT_UPDATE', "Edición de estudiante id=$id", 'OK');
         flash('ok', 'Estudiante actualizado.');
@@ -160,5 +146,48 @@ final class StudentController
         registrar_evento('STUDENT_DELETE', "Eliminación de estudiante id=$id", 'OK');
         flash('ok', 'Estudiante eliminado.');
         redirigir(url('students'));
+    }
+
+    /**
+     * Valida y normaliza el formulario de estudiante.
+     * Devuelve los datos saneados, o null (con mensaje flash) si algo no es válido.
+     */
+    private function validarEntradaEstudiante(): ?array
+    {
+        $v = new Validador();
+        $carne     = $v->carne((string)post('carne', ''));
+        $nombres   = $v->nombre((string)post('nombres', ''), 'nombres');
+        $apellidos = $v->nombre((string)post('apellidos', ''), 'apellidos');
+        $email     = $v->email((string)post('email', ''));
+        $fecha     = $v->fechaNacimiento((string)post('fecha_nacimiento', ''));
+        $telefono  = $v->telefono((string)post('telefono_emergencia', ''));
+
+        $estado = (string)post('estado', 'activo');
+        if (!in_array($estado, ['activo', 'inactivo', 'egresado'], true)) {
+            $v->errores[] = 'Estado no válido.';
+        }
+
+        $careerId = (string)post('career_id', '');
+        if ($careerId !== '') {
+            $careerId = $v->id($careerId);
+        } else {
+            $careerId = null;
+        }
+
+        if (!$v->ok()) {
+            flash('error', $v->primerError());
+            return null;
+        }
+
+        return [
+            'carne'               => $carne,
+            'nombres'             => $nombres,
+            'apellidos'           => $apellidos,
+            'email'               => $email,
+            'fecha_nacimiento'    => $fecha,
+            'career_id'           => $careerId,
+            'estado'              => $estado,
+            'telefono_emergencia' => $telefono,
+        ];
     }
 }

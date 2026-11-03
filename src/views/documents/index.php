@@ -1,9 +1,9 @@
-<?php /** Documentos: subir + listar */ ?>
-<?php $rol = rol_actual(); ?>
-<?php if (in_array($rol, ['admin','docente'], true)): ?>
+<?php /** Documentos: subir y listar */ ?>
+<?php if (in_array($rol, ['admin', 'docente'], true)): ?>
 <div class="panel">
     <h2>Subir documento</h2>
     <form method="post" action="<?= url('documents/upload') ?>" enctype="multipart/form-data">
+        <?= csrf_field() ?>
         <div class="form-grid">
             <div class="campo">
                 <label for="student_id">Estudiante *</label>
@@ -16,7 +16,7 @@
             </div>
             <div class="campo">
                 <label for="archivo">Archivo *</label>
-                <input type="file" id="archivo" name="archivo" required>
+                <input type="file" id="archivo" name="archivo" required accept=".pdf,.jpg,.jpeg,.png">
                 <span class="pista">PDF, JPG o PNG. Tamaño máximo: 5 MB.</span>
             </div>
         </div>
@@ -26,7 +26,7 @@
 <?php endif; ?>
 
 <div class="panel">
-    <h2>Documentos almacenados</h2>
+    <h2><?= $rol === 'estudiante' ? 'Mis documentos' : 'Documentos almacenados' ?></h2>
     <div class="tabla-wrap">
         <table class="tabla">
             <thead><tr><th>Archivo</th><th>Estudiante</th><th>Tipo</th><th>Tamaño</th><th>Subido</th><th>Por</th><th></th></tr></thead>
@@ -43,9 +43,10 @@
                     <td><?= e($d['subido_por_nombre'] ?? '—') ?></td>
                     <td class="acciones">
                         <a class="btn btn-sm btn-borde" href="<?= url('documents/download') ?>&id=<?= (int)$d['id'] ?>">Descargar</a>
-                        <?php if (in_array($rol, ['admin','docente'], true)): ?>
+                        <?php if ($rol === 'admin'): ?>
                             <form method="post" action="<?= url('documents/delete') ?>&id=<?= (int)$d['id'] ?>"
                                   data-confirmar="¿Eliminar documento?" style="display:inline">
+                                <?= csrf_field() ?>
                                 <button class="btn btn-sm btn-rojo" type="submit">Eliminar</button>
                             </form>
                         <?php endif; ?>

@@ -20,6 +20,34 @@ final class DocumentModel
         )->fetchAll();
     }
 
+    private const SELECT_LISTA =
+        "SELECT d.id, d.student_id, d.original_name, d.stored_name, d.mime_type, d.size_bytes,
+                d.subido_en, s.carne, s.nombres || ' ' || s.apellidos AS estudiante,
+                u.nombre_completo AS subido_por_nombre
+           FROM documents d
+           JOIN students s ON s.id = d.student_id
+           LEFT JOIN users u ON u.id = d.subido_por";
+
+    /** Documentos de un estudiante, con los mismos campos del listado general. */
+    public static function listaDeEstudiante(int $studentId): array
+    {
+        $stmt = Database::conn()->prepare(self::SELECT_LISTA . " WHERE d.student_id = ? ORDER BY d.id DESC");
+        $stmt->execute([$studentId]);
+        return $stmt->fetchAll();
+    }
+
+    /** Documentos de los estudiantes matriculados en los cursos de un docente. */
+    public static function listaDeDocente(int $teacherId): array
+    {
+        $stmt = Database::conn()->prepare(self::SELECT_LISTA . "
+              WHERE d.student_id IN (SELECT e.student_id FROM enrollments e
+                                       JOIN teacher_courses tc ON tc.course_id = e.course_id
+                                      WHERE tc.teacher_id = ?)
+              ORDER BY d.id DESC");
+        $stmt->execute([$teacherId]);
+        return $stmt->fetchAll();
+    }
+
     public static function porId(int $id): ?array
     {
         $stmt = Database::conn()->prepare(

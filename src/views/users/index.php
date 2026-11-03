@@ -25,6 +25,7 @@
                     <td class="acciones">
                         <a class="btn btn-sm" href="<?= url('users/edit') ?>&id=<?= (int)$u['id'] ?>">Editar</a>
                         <form method="post" action="<?= url('users/toggle') ?>&id=<?= (int)$u['id'] ?>" style="display:inline">
+                            <?= csrf_field() ?>
                             <button class="btn btn-sm btn-gris" type="submit">
                                 <?= (int)$u['activo'] === 1 ? 'Desactivar' : 'Activar' ?>
                             </button>

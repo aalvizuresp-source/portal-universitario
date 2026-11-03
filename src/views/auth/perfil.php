@@ -19,6 +19,7 @@
 <div class="panel">
     <h2>Cambiar contraseña</h2>
     <form method="post" action="<?= url('profile/password') ?>">
+        <?= csrf_field() ?>
         <div class="form-grid">
             <div class="campo">
                 <label for="actual">Contraseña actual</label>

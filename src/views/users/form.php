@@ -2,6 +2,7 @@
 <div class="panel">
     <h2><?= $usuario ? 'Editar usuario' : 'Nuevo usuario' ?></h2>
     <form method="post" action="<?= $accion ?>">
+        <?= csrf_field() ?>
         <div class="form-grid">
             <?php if (!$usuario): ?>
             <div class="campo">

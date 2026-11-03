@@ -36,8 +36,20 @@ final class UserController
         $password = (string)post('password', '');
         $roleId   = (int)post('role_id', 0);
 
-        if ($username === '' || $nombre === '' || $password === '' || $roleId === 0) {
-            flash('error', 'Complete los campos obligatorios.');
+        $v = new Validador();
+        $email  = $v->email($email);
+        $nombre = $v->nombre($nombre, 'nombre completo');
+        if (!preg_match('/^[A-Za-z0-9_.-]{3,30}$/', $username)) {
+            $v->errores[] = 'Usuario inválido (3–30 caracteres: letras, números, . _ -).';
+        }
+        if (mb_strlen($password) < 8) {
+            $v->errores[] = 'La contraseña debe tener al menos 8 caracteres.';
+        }
+        if ($roleId === 0) {
+            $v->errores[] = 'Seleccione un rol.';
+        }
+        if (!$v->ok()) {
+            flash('error', $v->primerError());
             redirigir(url('users/new'));
         }
         if (UserModel::existeUsername($username)) {

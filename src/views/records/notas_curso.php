@@ -15,8 +15,9 @@
                     <td><?= $m['nota'] !== null ? e((string)$m['nota']) : '—' ?></td>
                     <td colspan="2">
                         <form method="post" action="<?= url('grades/save') ?>" class="acciones">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="enrollment_id" value="<?= (int)$m['enrollment_id'] ?>">
-                            <input type="text" name="nota" placeholder="0-100" style="width:90px;padding:7px;border:1px solid var(--gris-borde);border-radius:6px">
+                            <input type="number" name="nota" min="0" max="100" step="0.01" required placeholder="0-100" style="width:90px;padding:7px;border:1px solid var(--gris-borde);border-radius:6px">
                             <button class="btn btn-sm btn-verde" type="submit">Guardar</button>
                         </form>
                     </td>

@@ -2,20 +2,23 @@
 <div class="panel">
     <h2>Publicar comentario</h2>
     <form method="post" action="<?= url('comments/create') ?>">
+        <?= csrf_field() ?>
         <div class="form-grid">
             <div class="campo">
                 <label for="student_id">Dirigido a</label>
                 <select id="student_id" name="student_id">
                     <option value="">General</option>
-                    <?php foreach ($estudiantes as $s): ?>
+                    <?php if ($rol === 'estudiante'): ?>
+                        <option value="yo">Sobre mi expediente</option>
+                    <?php else: foreach ($estudiantes as $s): ?>
                         <option value="<?= (int)$s['id'] ?>"><?= e($s['carne'] . ' · ' . $s['nombre']) ?></option>
-                    <?php endforeach; ?>
+                    <?php endforeach; endif; ?>
                 </select>
             </div>
         </div>
         <div class="campo">
             <label for="contenido">Comentario</label>
-            <textarea id="contenido" name="contenido" required
+            <textarea id="contenido" name="contenido" required maxlength="1000"
                       placeholder="Escriba su comentario..."></textarea>
         </div>
         <button class="btn btn-verde" type="submit">Publicar</button>
@@ -37,14 +40,15 @@
                         <?php if ($c['curso']): ?> · curso <?= e($c['curso']) ?><?php endif; ?>
                     </small>
                 </div>
-                <form method="post" action="<?= url('comments/delete') ?>&id=<?= (int)$c['id'] ?>"
-                      data-confirmar="¿Eliminar comentario?" style="display:inline">
-                    <button class="btn btn-sm btn-rojo" type="submit">Eliminar</button>
-                </form>
+                <?php if ($rol === 'admin' || (int)$c['autor_id'] === $uid): ?>
+                    <form method="post" action="<?= url('comments/delete') ?>&id=<?= (int)$c['id'] ?>"
+                          data-confirmar="¿Eliminar comentario?" style="display:inline">
+                        <?= csrf_field() ?>
+                        <button class="btn btn-sm btn-rojo" type="submit">Eliminar</button>
+                    </form>
+                <?php endif; ?>
             </div>
-            <div style="margin-top:8px">
-                <?= $c['contenido'] ?>
-            </div>
+            <div style="margin-top:8px"><?= nl2br(e($c['contenido'])) ?></div>
         </div>
     <?php endforeach; endif; ?>
 </div>

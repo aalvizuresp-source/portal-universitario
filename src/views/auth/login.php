@@ -22,6 +22,7 @@
         <?php endforeach; ?>
 
         <form method="post" action="<?= url('login/post') ?>">
+            <?= csrf_field() ?>
             <div class="campo">
                 <label for="username">Usuario</label>
                 <input type="text" id="username" name="username" autofocus required>

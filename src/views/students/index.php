@@ -1,28 +1,23 @@
-<?php /** Listado + búsqueda de estudiantes */ ?>
+<?php /** Listado y búsqueda de estudiantes */ ?>
 <div class="panel">
     <h2>Buscar estudiantes</h2>
     <form method="get" action="index.php" class="acciones">
         <input type="hidden" name="r" value="students/search">
-        <input type="text" name="q" placeholder="Carné, nombre, apellido o carrera"
+        <input type="text" name="q" placeholder="Carné, nombre, apellido o carrera" maxlength="60"
                value="<?= e($termino) ?>" style="flex:1;min-width:220px;padding:9px 11px;border:1px solid var(--gris-borde);border-radius:6px">
         <button class="btn" type="submit">Buscar</button>
         <a class="btn btn-borde" href="<?= url('students') ?>">Ver todos</a>
     </form>
 
     <?php if ($termino !== ''): ?>
-        <p class="pista" style="margin-top:12px">
-            Resultados para: <?= $termino ?>
-        </p>
+        <p class="pista" style="margin-top:12px">Resultados para: <?= e($termino) ?></p>
     <?php endif; ?>
-
 </div>
 
 <div class="panel">
     <div class="acciones" style="justify-content:space-between;margin-bottom:12px">
         <h2 style="margin:0">Estudiantes (<?= (int)$total ?>)</h2>
-        <?php if (rol_actual() === 'admin'): ?>
-            <a class="btn btn-verde" href="<?= url('students/new') ?>">+ Nuevo estudiante</a>
-        <?php endif; ?>
+        <a class="btn btn-verde" href="<?= url('students/new') ?>">+ Nuevo estudiante</a>
     </div>
 
     <div class="tabla-wrap">
@@ -49,13 +44,12 @@
                     </td>
                     <td class="acciones">
                         <a class="btn btn-sm btn-borde" href="<?= url('students/view') ?>&id=<?= (int)$s['id'] ?>">Ver</a>
-                        <?php if (rol_actual() === 'admin'): ?>
-                            <a class="btn btn-sm" href="<?= url('students/edit') ?>&id=<?= (int)$s['id'] ?>">Editar</a>
-                            <form method="post" action="<?= url('students/delete') ?>&id=<?= (int)$s['id'] ?>"
-                                  data-confirmar="¿Eliminar a este estudiante?" style="display:inline">
-                                <button class="btn btn-sm btn-rojo" type="submit">Eliminar</button>
-                            </form>
-                        <?php endif; ?>
+                        <a class="btn btn-sm" href="<?= url('students/edit') ?>&id=<?= (int)$s['id'] ?>">Editar</a>
+                        <form method="post" action="<?= url('students/delete') ?>&id=<?= (int)$s['id'] ?>"
+                              data-confirmar="¿Eliminar a este estudiante?" style="display:inline">
+                            <?= csrf_field() ?>
+                            <button class="btn btn-sm btn-rojo" type="submit">Eliminar</button>
+                        </form>
                     </td>
                 </tr>
             <?php endforeach; endif; ?>

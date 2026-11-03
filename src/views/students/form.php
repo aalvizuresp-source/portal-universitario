@@ -2,26 +2,27 @@
 <div class="panel">
     <h2><?= $estudiante ? 'Editar estudiante' : 'Nuevo estudiante' ?></h2>
     <form method="post" action="<?= $accion ?>">
+        <?= csrf_field() ?>
         <div class="form-grid">
             <div class="campo">
                 <label for="carne">Carné *</label>
-                <input type="text" id="carne" name="carne" required
+                <input type="text" id="carne" name="carne" required maxlength="9" pattern="\d{4}-\d{4}"
                        value="<?= e($estudiante['carne'] ?? '') ?>">
                 <span class="pista">Formato: 2021-0001</span>
             </div>
             <div class="campo">
                 <label for="nombres">Nombres *</label>
-                <input type="text" id="nombres" name="nombres" required
+                <input type="text" id="nombres" name="nombres" required maxlength="80"
                        value="<?= e($estudiante['nombres'] ?? '') ?>">
             </div>
             <div class="campo">
                 <label for="apellidos">Apellidos *</label>
-                <input type="text" id="apellidos" name="apellidos" required
+                <input type="text" id="apellidos" name="apellidos" required maxlength="80"
                        value="<?= e($estudiante['apellidos'] ?? '') ?>">
             </div>
             <div class="campo">
-                <label for="email">Correo electrónico</label>
-                <input type="text" id="email" name="email"
+                <label for="email">Correo electrónico *</label>
+                <input type="email" id="email" name="email" required maxlength="120"
                        value="<?= e($estudiante['email'] ?? '') ?>">
             </div>
             <div class="campo">
@@ -52,7 +53,7 @@
             </div>
             <div class="campo">
                 <label for="telefono_emergencia">Teléfono de emergencia</label>
-                <input type="text" id="telefono_emergencia" name="telefono_emergencia"
+                <input type="tel" id="telefono_emergencia" name="telefono_emergencia" maxlength="20"
                        value="<?= e($estudiante['telefono_emergencia'] ?? '') ?>">
                 <span class="pista">Ejemplo: 5512-0001</span>
             </div>

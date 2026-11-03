@@ -32,6 +32,7 @@ $rutas = [
 
     // Panel
     'dashboard'        => [DashboardController::class, 'index'],
+    'admin/diagnostico' => [DashboardController::class, 'diagnosticoErrores'],
 
     // Perfil / contraseña
     'profile'          => [AuthController::class, 'perfil'],
@@ -83,13 +84,16 @@ $rutas = [
     'reports/summary'  => [ReportController::class, 'descargarResumen'],
 ];
 
+// Verificación CSRF de toda petición POST (todos los formularios llevan token).
+csrf_verificar();
+
 try {
     if (!isset($rutas[$r])) {
         http_response_code(404);
         if (esta_autenticado()) {
             render_vista('error', [
                 'titulo'  => 'Página no encontrada',
-                'mensaje' => "La ruta solicitada no existe: " . e($r),
+                'mensaje' => 'La página solicitada no existe.',
             ]);
         } else {
             redirigir(url('login'));
@@ -100,11 +104,28 @@ try {
     [$clase, $metodo] = $rutas[$r];
     (new $clase())->$metodo();
 } catch (Throwable $ex) {
+    // Manejo central de errores: el usuario recibe un mensaje genérico con una
+    // referencia; el detalle técnico sólo se escribe en el registro del servidor.
+    $ref = bin2hex(random_bytes(4)); // referencia para cruzar con el log
+    @file_put_contents(
+        LOGS_PATH . '/app.log',
+        sprintf("[%s] ERROR ref=%s %s en %s:%d%s",
+            date('Y-m-d H:i:s'), $ref, $ex->getMessage(),
+            $ex->getFile(), $ex->getLine(), PHP_EOL),
+        FILE_APPEND
+    );
+    registrar_evento('ERROR_INTERNO', "Error interno (ref $ref)", 'ERROR');
+
     http_response_code(500);
-    echo "<pre style='background:#300;color:#fdd;padding:16px'>";
-    echo "Error en la aplicación:\n\n";
-    echo e($ex->getMessage()) . "\n\n";
-    echo e($ex->getFile()) . ':' . $ex->getLine() . "\n\n";
-    echo e($ex->getTraceAsString());
-    echo "</pre>";
+    if (esta_autenticado()) {
+        render_vista('error', [
+            'titulo'  => 'Ocurrió un error',
+            'mensaje' => "Se produjo un error interno. Referencia: $ref. "
+                       . "Si persiste, contacte al administrador.",
+        ]);
+    } else {
+        echo "<!doctype html><meta charset='utf-8'>";
+        echo "<p style='font-family:sans-serif;padding:24px'>Ocurrió un error interno. "
+           . "Referencia: " . e($ref) . ".</p>";
+    }
 }

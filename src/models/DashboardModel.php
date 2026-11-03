@@ -22,6 +22,56 @@ final class DashboardModel
         ];
     }
 
+    /** Indicadores de un docente: sólo sus cursos y sus estudiantes. */
+    public static function estadisticasDocente(int $teacherId): array
+    {
+        $db = Database::conn();
+        $q = function (string $sql) use ($db, $teacherId): int {
+            $st = $db->prepare($sql);
+            $st->execute([$teacherId]);
+            return (int)$st->fetchColumn();
+        };
+        return [
+            'cursos'      => $q("SELECT COUNT(*) FROM teacher_courses WHERE teacher_id = ?"),
+            'estudiantes' => $q("SELECT COUNT(DISTINCT e.student_id) FROM enrollments e
+                                   JOIN teacher_courses tc ON tc.course_id = e.course_id
+                                  WHERE tc.teacher_id = ?"),
+            'calificadas' => $q("SELECT COUNT(*) FROM enrollments e
+                                   JOIN teacher_courses tc ON tc.course_id = e.course_id
+                                   JOIN grades g ON g.enrollment_id = e.id
+                                  WHERE tc.teacher_id = ?"),
+            'pendientes'  => $q("SELECT COUNT(*) FROM enrollments e
+                                   JOIN teacher_courses tc ON tc.course_id = e.course_id
+                                   LEFT JOIN grades g ON g.enrollment_id = e.id
+                                  WHERE tc.teacher_id = ? AND g.id IS NULL"),
+        ];
+    }
+
+    /** Indicadores de un estudiante: sólo su propio expediente. */
+    public static function estadisticasEstudiante(int $studentId): array
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT COUNT(e.id)                                   AS cursos,
+                    SUM(CASE WHEN g.aprobado = 1 THEN 1 ELSE 0 END) AS aprobados,
+                    SUM(CASE WHEN g.id IS NULL THEN 1 ELSE 0 END)   AS pendientes,
+                    ROUND(AVG(g.nota), 1)                           AS promedio
+               FROM enrollments e
+               LEFT JOIN grades g ON g.enrollment_id = e.id
+              WHERE e.student_id = ?"
+        );
+        $stmt->execute([$studentId]);
+        $r = $stmt->fetch() ?: [];
+        $docs = Database::conn()->prepare("SELECT COUNT(*) FROM documents WHERE student_id = ?");
+        $docs->execute([$studentId]);
+        return [
+            'cursos'     => (int)($r['cursos'] ?? 0),
+            'aprobados'  => (int)($r['aprobados'] ?? 0),
+            'pendientes' => (int)($r['pendientes'] ?? 0),
+            'promedio'   => $r['promedio'] !== null ? (float)$r['promedio'] : null,
+            'documentos' => (int)$docs->fetchColumn(),
+        ];
+    }
+
     public static function ultimasActividades(int $limite = 8): array
     {
         $stmt = Database::conn()->prepare(

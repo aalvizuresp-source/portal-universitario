@@ -1,25 +1,34 @@
 <?php
 /**
  * StudentModel — acceso a la tabla students.
+ *
+ * El teléfono de emergencia se guarda cifrado (Sodium) y se descifra al leerlo.
  */
 
 declare(strict_types=1);
 
 final class StudentModel
 {
-    /** Busca estudiantes por carné, nombres, apellidos o carrera. */
+    /**
+     * Busca estudiantes por carné, nombres, apellidos o carrera.
+     * El término se pasa como parámetro enlazado de una sentencia preparada.
+     */
     public static function buscar(string $termino): array
     {
-        $sql = "SELECT s.id, s.carne, s.nombres, s.apellidos, s.email,
-                       s.estado, c.nombre AS carrera
-                  FROM students s
-                  LEFT JOIN careers c ON c.id = s.career_id
-                 WHERE s.nombres   LIKE '%$termino%'
-                    OR s.apellidos LIKE '%$termino%'
-                    OR s.carne     LIKE '%$termino%'
-                    OR c.nombre    LIKE '%$termino%'
-                 ORDER BY s.apellidos, s.nombres";
-        return Database::conn()->query($sql)->fetchAll();
+        $like = '%' . $termino . '%';
+        $stmt = Database::conn()->prepare(
+            "SELECT s.id, s.carne, s.nombres, s.apellidos, s.email,
+                    s.estado, c.nombre AS carrera
+               FROM students s
+               LEFT JOIN careers c ON c.id = s.career_id
+              WHERE s.nombres   LIKE ?
+                 OR s.apellidos LIKE ?
+                 OR s.carne     LIKE ?
+                 OR c.nombre    LIKE ?
+              ORDER BY s.apellidos, s.nombres"
+        );
+        $stmt->execute([$like, $like, $like, $like]);
+        return $stmt->fetchAll();
     }
 
     public static function contar(): int
@@ -52,7 +61,12 @@ final class StudentModel
               WHERE s.id = ?"
         );
         $stmt->execute([$id]);
-        return $stmt->fetch() ?: null;
+        $row = $stmt->fetch();
+        if (!$row) { return null; }
+        if (isset($row['telefono_emergencia'])) {
+            $row['telefono_emergencia'] = lab_descifrar($row['telefono_emergencia']);
+        }
+        return $row;
     }
 
     public static function porCarne(string $carne): ?array
@@ -72,7 +86,7 @@ final class StudentModel
         $stmt->execute([
             $d['carne'], $d['nombres'], $d['apellidos'], $d['email'],
             $d['fecha_nacimiento'] ?: null, $d['career_id'] ?: null,
-            $d['estado'] ?? 'activo', $d['telefono_emergencia'] ?? null,
+            $d['estado'] ?? 'activo', self::cifrarTelefono($d['telefono_emergencia'] ?? null),
         ]);
         return (int)Database::conn()->lastInsertId();
     }
@@ -88,8 +102,15 @@ final class StudentModel
         $stmt->execute([
             $d['carne'], $d['nombres'], $d['apellidos'], $d['email'],
             $d['fecha_nacimiento'] ?: null, $d['career_id'] ?: null,
-            $d['estado'], $d['telefono_emergencia'] ?? null, $id,
+            $d['estado'], self::cifrarTelefono($d['telefono_emergencia'] ?? null), $id,
         ]);
+    }
+
+    /** Cifra el teléfono de emergencia antes de guardarlo. */
+    private static function cifrarTelefono(?string $valor): ?string
+    {
+        if ($valor === null || $valor === '') { return null; }
+        return lab_cifrar($valor);
     }
 
     public static function eliminar(int $id): void

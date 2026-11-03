@@ -64,6 +64,37 @@ final class AcademicModel
         return (bool)$stmt->fetchColumn();
     }
 
+    /** ¿El estudiante está matriculado en algún curso asignado al docente? */
+    public static function docenteTieneEstudiante(int $teacherId, int $studentId): bool
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT 1
+               FROM enrollments e
+               JOIN teacher_courses tc ON tc.course_id = e.course_id
+              WHERE tc.teacher_id = ? AND e.student_id = ?
+              LIMIT 1"
+        );
+        $stmt->execute([$teacherId, $studentId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    /** Estudiantes matriculados en los cursos de un docente. */
+    public static function estudiantesDeDocente(int $teacherId): array
+    {
+        $stmt = Database::conn()->prepare(
+            "SELECT DISTINCT s.id, s.carne, s.nombres, s.apellidos, s.email, s.estado,
+                    c.nombre AS carrera
+               FROM students s
+               JOIN enrollments e      ON e.student_id = s.id
+               JOIN teacher_courses tc ON tc.course_id = e.course_id
+               LEFT JOIN careers c     ON c.id = s.career_id
+              WHERE tc.teacher_id = ?
+              ORDER BY s.apellidos, s.nombres"
+        );
+        $stmt->execute([$teacherId]);
+        return $stmt->fetchAll();
+    }
+
     public static function enrollmentPorId(int $enrollmentId): ?array
     {
         $stmt = Database::conn()->prepare(

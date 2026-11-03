@@ -17,7 +17,43 @@ function iniciar_sesion_segura(): void
     if (session_status() === PHP_SESSION_ACTIVE) {
         return;
     }
+    // Cookie de sesión:
+    //  - HttpOnly: inaccesible desde JavaScript (mitiga robo por XSS).
+    //  - SameSite=Lax: no se envía en peticiones cross-site de terceros (mitiga CSRF).
+    //  - Secure: sólo bajo HTTPS. Se activa cuando la conexión es https (Caddy).
+    $esHttps = (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure'   => $esHttps,
+    ]);
+    ini_set('session.use_strict_mode', '1'); // rechaza IDs de sesión no generados por el servidor
     session_start();
+}
+
+/**
+ * Envía cabeceras de seguridad HTTP. Se llama al inicio de cada respuesta HTML.
+ */
+function enviar_cabeceras_seguridad(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('Referrer-Policy: no-referrer');
+    // CSP:
+    //  - script-src 'self'  -> bloquea <script> inline inyectado (defensa en
+    //    profundidad frente a XSS, además de la codificación de salida).
+    //  - style-src admite 'unsafe-inline' porque la plantilla usa atributos
+    //    style=; los estilos no ejecutan código, así que el riesgo es menor.
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; "
+        . "style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; "
+        . "base-uri 'self'; frame-ancestors 'none'");
 }
 
 function usuario_actual(): ?array
@@ -88,6 +124,39 @@ function requerir_rol(array $rolesPermitidos): void
     }
 }
 
+/**
+ * ¿El usuario actual puede acceder a los datos de este estudiante?
+ *   - admin:      cualquier estudiante.
+ *   - docente:    sólo estudiantes matriculados en sus cursos.
+ *   - estudiante: sólo su propia ficha.
+ */
+function puede_acceder_estudiante(int $studentId): bool
+{
+    switch (rol_actual()) {
+        case 'admin':
+            return true;
+        case 'docente':
+            return AcademicModel::docenteTieneEstudiante((int)id_usuario_actual(), $studentId);
+        case 'estudiante':
+            return (int)(usuario_actual()['student_id'] ?? 0) === $studentId && $studentId > 0;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Deniega la operación: registra el intento en la bitácora, responde 403 y
+ * muestra un mensaje genérico. No devuelve el control.
+ */
+function denegar_acceso(string $tipoEvento, string $descripcion,
+                        string $mensaje = 'No tiene permisos para realizar esta operación.'): never
+{
+    registrar_evento($tipoEvento, $descripcion, 'DENEGADO');
+    http_response_code(403);
+    render_vista('error', ['titulo' => 'Acceso denegado', 'mensaje' => $mensaje]);
+    exit;
+}
+
 // ---------------------------------------------------------------------------
 // Flash messages
 // ---------------------------------------------------------------------------
@@ -126,6 +195,9 @@ function redirigir(string $url): void
 /** Renderiza una vista dentro del layout principal. */
 function render_vista(string $vista, array $datos = []): void
 {
+    if (!isset($datos['titulo_pagina']) && isset($datos['titulo'])) {
+        $datos['titulo_pagina'] = $datos['titulo'];
+    }
     extract($datos, EXTR_SKIP);
     $__vista = SRC_PATH . '/views/' . $vista . '.php';
     if (!is_file($__vista)) {
@@ -152,12 +224,17 @@ function render_sola(string $vista, array $datos = []): void
 // ---------------------------------------------------------------------------
 /**
  * registrar_evento() — escribe en audit_logs y en storage/logs/app.log.
-
+ *
+ * Nunca debe recibir contraseñas, tokens ni claves.
  */
 function registrar_evento(string $tipo, string $descripcion, string $resultado = 'OK', ?int $userId = null): void
 {
     $userId = $userId ?? id_usuario_actual();
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'cli';
+    // Sin saltos de línea ni caracteres de control: impide insertar entradas
+    // falsas en el archivo de registro (log injection).
+    $descripcion = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $descripcion) ?? '';
+    $descripcion = mb_substr($descripcion, 0, 500);
 
     try {
         $stmt = Database::conn()->prepare(

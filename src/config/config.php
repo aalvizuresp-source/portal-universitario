@@ -1,6 +1,10 @@
 <?php
 /**
  * config.php — configuración central de LabSeguridad.
+ *
+ * Los secretos no se escriben aquí: se leen de variables de entorno mediante
+ * lab_secreto(). Los errores no se muestran al usuario; se registran en
+ * storage/logs/.
  */
 
 declare(strict_types=1);
@@ -16,28 +20,45 @@ define('DB_PATH',      APP_ROOT . DIRECTORY_SEPARATOR . 'database' . DIRECTORY_S
 define('UPLOADS_PATH', STORAGE_PATH . DIRECTORY_SEPARATOR . 'uploads');
 define('REPORTS_PATH', STORAGE_PATH . DIRECTORY_SEPARATOR . 'reports');
 define('LOGS_PATH',    STORAGE_PATH . DIRECTORY_SEPARATOR . 'logs');
+define('KEYS_PATH',    STORAGE_PATH . DIRECTORY_SEPARATOR . 'keys');
 
 // ---------------------------------------------------------------------------
 // Identidad de la aplicación
 // ---------------------------------------------------------------------------
 define('APP_NAME',    'LabSeguridad');
-define('APP_VERSION', '1.0');
+define('APP_VERSION', '2.0');
 
 // ---------------------------------------------------------------------------
-// Credenciales de la aplicación
+// Cargar el gestor de secretos (provee lab_secreto()).
 // ---------------------------------------------------------------------------
-define('APP_SECRET_KEY',   'sk_lab_7f3d9a1c8e5b4206bdfa91c3e7d20f45');
-define('DB_PASSWORD',      'Portal#Univ2026!db');
-define('API_TOKEN',        'ghp_FAKE0lab000TOKEN000demo000no000real00');
+require_once __DIR__ . '/secrets.php';
+
+// ---------------------------------------------------------------------------
+// Secretos: se leen de variables de entorno con lab_secreto().
+// El valor por defecto sólo sirve para desarrollo local; en cualquier otro
+// entorno APP_SECRET_KEY debe definirse como variable de entorno.
+// ---------------------------------------------------------------------------
+define('APP_SECRET_KEY', lab_secreto('APP_SECRET_KEY', 'dev-only-no-usar-en-produccion'));
 
 // ---------------------------------------------------------------------------
 // Parámetros de la aplicación
 // ---------------------------------------------------------------------------
 define('NOTA_APROBACION', 61);
 define('ITEMS_POR_PAGINA', 8);
-define('MAX_UPLOAD_BYTES', 5 * 1024 * 1024);
+define('MAX_UPLOAD_BYTES', 5 * 1024 * 1024); // 5 MB
+define('MAX_INTENTOS_LOGIN', 5);             // intentos antes de bloqueo temporal
+define('BLOQUEO_LOGIN_SEGUNDOS', 300);       // 5 minutos de bloqueo
 
+// ---------------------------------------------------------------------------
+// Zona horaria
+// ---------------------------------------------------------------------------
 date_default_timezone_set('America/Guatemala');
 
+// ---------------------------------------------------------------------------
+// Errores: NO se muestran al usuario (se registran). El manejador central del
+// bootstrap muestra un mensaje genérico.
+// ---------------------------------------------------------------------------
 error_reporting(E_ALL);
-ini_set('display_errors', '1');
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+ini_set('error_log', LOGS_PATH . DIRECTORY_SEPARATOR . 'php_error.log');

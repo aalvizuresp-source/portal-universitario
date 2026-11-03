@@ -22,6 +22,7 @@
         <?php endforeach; ?>
 
         <form method="post" action="<?= url('register/post') ?>">
+            <?= csrf_field() ?>
             <div class="campo">
                 <label for="username">Usuario</label>
                 <input type="text" id="username" name="username" required>
@@ -32,7 +33,8 @@
             </div>
             <div class="campo">
                 <label for="email">Correo electrónico</label>
-                <input type="text" id="email" name="email" required>
+                <input type="email" id="email" name="email" required>
+                <span class="pista">Se valida el formato en el servidor.</span>
             </div>
             <div class="campo">
                 <label for="password">Contraseña</label>

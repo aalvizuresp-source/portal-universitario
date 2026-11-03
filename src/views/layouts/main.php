@@ -30,7 +30,7 @@ $flashes = obtener_flash();
         <nav class="menu">
             <a class="<?= activo('dashboard', $rutaActual) ?>" href="<?= url('dashboard') ?>">Panel principal</a>
 
-            <?php if (in_array(rol_actual(), ['admin','docente'], true)): ?>
+            <?php if (rol_actual() === 'admin'): ?>
                 <a class="<?= activo('students', $rutaActual) ?>" href="<?= url('students') ?>">Estudiantes</a>
             <?php endif; ?>
 

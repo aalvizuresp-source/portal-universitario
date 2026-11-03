@@ -1,12 +1,19 @@
 <?php
 /**
- * ReportService — generación de reportes CSV y resumen de reportes.
+ * ReportService — generación de reportes CSV con PHP nativo y resumen de reportes.
+ *
+ * Ninguna operación invoca al intérprete de comandos del sistema: los archivos
+ * se generan con funciones nativas de PHP (fputcsv, file_put_contents).
  */
 
 declare(strict_types=1);
 
 final class ReportService
 {
+    /* -------------------------------------------------------------------- *
+     *  Reportes CSV  (PHP nativo, sin dependencias)                        *
+     * -------------------------------------------------------------------- */
+
     /** Escribe filas a un CSV y devuelve la ruta del archivo generado. */
     private static function escribirCsv(string $nombreBase, array $cabeceras, array $filas): string
     {
@@ -37,17 +44,27 @@ final class ReportService
             ['Carné','Nombres','Apellidos','Email','Estado','Carrera','Registro'], $filas);
     }
 
-    public static function reporteCalificaciones(): string
+    /**
+     * Calificaciones. Si se indica $teacherId, sólo las de los cursos asignados
+     * a ese docente.
+     */
+    public static function reporteCalificaciones(?int $teacherId = null): string
     {
-        $rows = Database::conn()->query(
-            "SELECT s.carne, s.nombres || ' ' || s.apellidos AS estudiante,
-                    cu.codigo, cu.nombre AS curso, g.nota, g.aprobado, g.periodo
-               FROM grades g
-               JOIN enrollments e ON e.id = g.enrollment_id
-               JOIN students s ON s.id = e.student_id
-               JOIN courses  cu ON cu.id = e.course_id
-              ORDER BY s.apellidos, cu.codigo"
-        )->fetchAll();
+        $sql = "SELECT s.carne, s.nombres || ' ' || s.apellidos AS estudiante,
+                       cu.codigo, cu.nombre AS curso, g.nota, g.aprobado, g.periodo
+                  FROM grades g
+                  JOIN enrollments e ON e.id = g.enrollment_id
+                  JOIN students s ON s.id = e.student_id
+                  JOIN courses  cu ON cu.id = e.course_id";
+        $params = [];
+        if ($teacherId !== null) {
+            $sql .= " WHERE cu.id IN (SELECT course_id FROM teacher_courses WHERE teacher_id = ?)";
+            $params[] = $teacherId;
+        }
+        $sql .= " ORDER BY s.apellidos, cu.codigo";
+        $stmt = Database::conn()->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
         $filas = array_map(fn($r) => [
             $r['carne'], $r['estudiante'], $r['codigo'], $r['curso'],
             $r['nota'], $r['aprobado'] ? 'Sí' : 'No', $r['periodo'],
@@ -92,19 +109,30 @@ final class ReportService
         return REPORTS_PATH . DIRECTORY_SEPARATOR . 'resumen.txt';
     }
 
-    /** Genera el resumen de reportes con la etiqueta indicada. */
+    /**
+     * Genera el resumen de reportes con la etiqueta indicada por el usuario.
+     *
+     * La etiqueta se depura por lista blanca (letras, números, espacio y guion;
+     * máximo 40 caracteres) y el archivo se escribe con file_put_contents(): no
+     * se construye ni ejecuta ningún comando del sistema operativo.
+     * Devuelve la etiqueta finalmente utilizada.
+     */
     public static function generarResumen(string $etiqueta): string
     {
         if (!is_dir(REPORTS_PATH)) { mkdir(REPORTS_PATH, 0775, true); }
-        $resumen = self::rutaResumen();
 
-        if (stripos(PHP_OS, 'WIN') === 0) {
-            $comando = 'echo Resumen de reportes: ' . $etiqueta . ' > "' . $resumen . '"';
-        } else {
-            $comando = 'echo "Resumen de reportes: ' . $etiqueta . '" > ' . $resumen;
-        }
-        shell_exec($comando . ' 2>&1');
+        $limpia = preg_replace('/[^\p{L}0-9 \-]/u', '', $etiqueta) ?? '';
+        $limpia = mb_substr(trim(preg_replace('/\s+/', ' ', $limpia)), 0, 40);
+        if ($limpia === '') { $limpia = 'reporte'; }
 
-        return $etiqueta;
+        $db = Database::conn();
+        $contenido = "Resumen de reportes: {$limpia}" . PHP_EOL
+            . 'Generado: ' . date('Y-m-d H:i:s') . PHP_EOL
+            . 'Estudiantes registrados: ' . (int)$db->query("SELECT COUNT(*) FROM students")->fetchColumn() . PHP_EOL
+            . 'Calificaciones registradas: ' . (int)$db->query("SELECT COUNT(*) FROM grades")->fetchColumn() . PHP_EOL
+            . 'Cursos: ' . (int)$db->query("SELECT COUNT(*) FROM courses")->fetchColumn() . PHP_EOL;
+
+        file_put_contents(self::rutaResumen(), "\xEF\xBB\xBF" . $contenido);
+        return $limpia;
     }
 }

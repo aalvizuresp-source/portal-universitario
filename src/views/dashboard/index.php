@@ -1,4 +1,4 @@
-<?php /** Panel principal: indicadores y actividad reciente */ ?>
+<?php /** Panel principal del administrador: indicadores globales y bitácora */ ?>
 <div class="stats">
     <div class="stat"><div class="num"><?= (int)$stats['usuarios'] ?></div><div class="lbl">Usuarios registrados</div></div>
     <div class="stat"><div class="num"><?= (int)$stats['estudiantes'] ?></div><div class="lbl">Estudiantes activos</div></div>
@@ -9,7 +9,7 @@
 </div>
 
 <div class="panel">
-    <h2>Últimas actividades</h2>
+    <h2>Últimas actividades del sistema</h2>
     <div class="tabla-wrap">
         <table class="tabla">
             <thead>

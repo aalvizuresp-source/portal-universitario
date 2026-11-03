@@ -16,6 +16,9 @@
  *     estu1    / Estudiante123   (carné 2021-0001)
  *     estu2    / Estudiante123   (carné 2021-0002)
  *
+ * NOTA (ETAPA 2): las contraseñas se guardan con password_hash() (Argon2id/bcrypt),
+ * con sal y coste. La cuenta estu2 se crea con un hash heredado (SHA-256) para
+ * comprobar la migración automática en su primer inicio de sesión.
  */
 
 declare(strict_types=1);
@@ -24,6 +27,16 @@ require __DIR__ . '/../src/config/config.php';
 require __DIR__ . '/../src/config/Database.php';
 require __DIR__ . '/../src/helpers/security.php';
 require __DIR__ . '/pdf_simple.php';
+
+function seed_hash(string $pass): string
+{
+    return lab_hash_password($pass);
+}
+
+function seed_cifrar(?string $valor): ?string
+{
+    return lab_cifrar($valor);
+}
 
 $pdo = Database::conn();
 
@@ -81,7 +94,12 @@ try {
         "INSERT INTO students (carne, nombres, apellidos, email, fecha_nacimiento, career_id, estado, telefono_emergencia)
          VALUES (?,?,?,?,?,?,?,?)"
     );
-    foreach ($students as $s) { $stmt->execute($s); }
+    foreach ($students as $s) {
+        // El teléfono de emergencia (índice 7) es el dato sensible: se cifra
+        // en la ETAPA 2 (seed_cifrar) y se deja en claro en la ETAPA 1.
+        $s[7] = seed_cifrar($s[7]);
+        $stmt->execute($s);
+    }
 
     $studentIdByCarne = [];
     foreach ($pdo->query("SELECT id, carne FROM students") as $row) {
@@ -89,7 +107,6 @@ try {
     }
 
     // --- usuarios ----------------------------------------------------------
-    // password_hash = SHA-256 sin sal (V05).
     $users = [
         // username, nombre, email, password, role, student_carne(o null)
         ['admin',    'Administrador General', 'admin@lab.edu.gt',    'Admin123',     'admin',      null],
@@ -105,10 +122,17 @@ try {
     foreach ($users as $u) {
         [$username,$nombre,$email,$pass,$rol,$carne] = $u;
         $sid = $carne !== null ? $studentIdByCarne[$carne] : null;
+
+        // estu2 simula una cuenta importada del sistema anterior (hash heredado
+        // SHA-256); se migra a password_hash() en su primer inicio de sesión.
+        if ($username === 'estu2') {
+            $hash = hash('sha256', $pass);
+        } else {
+            $hash = seed_hash($pass);
+        }
+
         $stmt->execute([
-            $username, $nombre, $email,
-            lab_hash_password($pass),
-            $roleId[$rol], $sid,
+            $username, $nombre, $email, $hash, $roleId[$rol], $sid,
         ]);
     }
 
@@ -219,10 +243,11 @@ try {
     );
     foreach ($docSamples as $d) {
         [$carne,$name,$body] = $d;
+        $stored = bin2hex(random_bytes(16)) . '.pdf';   // nombre aleatorio en disco
         $pdf = pdf_simple($body);
-        file_put_contents(UPLOADS_PATH . DIRECTORY_SEPARATOR . $name, $pdf);
+        file_put_contents(UPLOADS_PATH . DIRECTORY_SEPARATOR . $stored, $pdf);
         $stmt->execute([
-            $studentIdByCarne[$carne], $name, $name,
+            $studentIdByCarne[$carne], $name, $stored,
             'application/pdf', strlen($pdf), $userIdByName['admin'],
         ]);
     }

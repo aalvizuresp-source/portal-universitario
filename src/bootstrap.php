@@ -2,8 +2,8 @@
 /**
  * bootstrap.php — punto de arranque común.
  *
- * Carga configuración, base de datos, helpers y todos los modelos/controladores.
- * Carga mediante require explícito (sin dependencias externas).
+ * Carga configuración, base de datos, helpers, modelos, servicios y
+ * controladores mediante require explícito (sin dependencias externas).
  */
 
 declare(strict_types=1);
@@ -36,13 +36,15 @@ require __DIR__ . '/controllers/CommentController.php';
 require __DIR__ . '/controllers/DocumentController.php';
 require __DIR__ . '/controllers/ReportController.php';
 
-// La base de datos debe existir.
+// Sin base de datos el servicio no puede atender: mensaje genérico al usuario,
+// detalle en el registro del servidor.
 if (!is_file(DB_PATH)) {
-    http_response_code(500);
-    echo "<h1>Base de datos no inicializada</h1>";
-    echo "<p>Ejecute desde la raíz del proyecto:</p>";
-    echo "<pre>php scripts/init_db.php\nphp scripts/seed.php</pre>";
+    error_log('Base de datos no encontrada en ' . DB_PATH);
+    http_response_code(503);
+    echo "<!doctype html><meta charset='utf-8'><title>Servicio no disponible</title>";
+    echo "<p style='font-family:sans-serif;padding:24px'>El servicio no está disponible en este momento.</p>";
     exit;
 }
 
 iniciar_sesion_segura();
+enviar_cabeceras_seguridad();

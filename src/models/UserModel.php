@@ -98,4 +98,30 @@ final class UserModel
         $stmt->execute([$username]);
         return (bool)$stmt->fetchColumn();
     }
+
+    /* ---- Control de intentos fallidos de inicio de sesión ---- */
+
+    public static function incrementarIntentos(int $id): void
+    {
+        $stmt = Database::conn()->prepare(
+            "UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = ?"
+        );
+        $stmt->execute([$id]);
+    }
+
+    public static function reiniciarIntentos(int $id): void
+    {
+        $stmt = Database::conn()->prepare(
+            "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?"
+        );
+        $stmt->execute([$id]);
+    }
+
+    public static function bloquearHasta(int $id, string $hasta): void
+    {
+        $stmt = Database::conn()->prepare(
+            "UPDATE users SET locked_until = ? WHERE id = ?"
+        );
+        $stmt->execute([$hasta, $id]);
+    }
 }
