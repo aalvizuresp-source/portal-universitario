@@ -260,9 +260,10 @@ final class Validador
  */
 function lab_clave_cifrado(): string
 {
-    // Prioridad 1: variable de entorno (clave en base64).
-    $env = getenv('APP_ENCRYPTION_KEY');
-    if ($env !== false && $env !== '') {
+    // Prioridad 1: secreto externo (variable de entorno del proceso o .env),
+    // leído con el mismo mecanismo unificado que el resto de secretos.
+    $env = lab_secreto('APP_ENCRYPTION_KEY');
+    if ($env !== null && $env !== '') {
         $bin = base64_decode($env, true);
         if ($bin !== false && strlen($bin) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
             return $bin;

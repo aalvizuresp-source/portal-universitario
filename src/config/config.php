@@ -38,7 +38,20 @@ require_once __DIR__ . '/secrets.php';
 // El valor por defecto sólo sirve para desarrollo local; en cualquier otro
 // entorno APP_SECRET_KEY debe definirse como variable de entorno.
 // ---------------------------------------------------------------------------
-define('APP_SECRET_KEY', lab_secreto('APP_SECRET_KEY', 'dev-only-no-usar-en-produccion'));
+// En producción (APP_ENV=production) la aplicación NO arranca si el secreto no
+// está definido: falla de forma segura en lugar de usar un valor conocido.
+$__app_secret = lab_secreto('APP_SECRET_KEY');
+if ($__app_secret === null || $__app_secret === '') {
+    if ((getenv('APP_ENV') ?: 'development') === 'production') {
+        http_response_code(500);
+        error_log('APP_SECRET_KEY no está definido en el entorno de producción.');
+        exit('Configuración incompleta: falta APP_SECRET_KEY.');
+    }
+    // Sólo desarrollo local: valor por defecto marcado, nunca para producción.
+    $__app_secret = 'dev-only-no-usar-en-produccion';
+}
+define('APP_SECRET_KEY', $__app_secret);
+unset($__app_secret);
 
 // ---------------------------------------------------------------------------
 // Parámetros de la aplicación

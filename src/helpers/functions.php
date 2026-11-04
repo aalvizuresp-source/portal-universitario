@@ -43,6 +43,7 @@ function enviar_cabeceras_seguridad(): void
     if (headers_sent()) {
         return;
     }
+    header_remove('X-Powered-By'); // no revelar la versión de PHP
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: no-referrer');

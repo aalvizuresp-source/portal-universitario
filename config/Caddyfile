@@ -12,6 +12,11 @@
 #      caddy run --config .\Caddyfile
 # ============================================================================
 
+# --- Redirección de HTTP a HTTPS: todo el tráfico en claro se reenvía a TLS ---
+http://localhost {
+    redir https://localhost{uri} permanent
+}
+
 # --- Acceso local por HTTPS (certificado de la CA interna de Caddy) ---
 https://localhost {
     # El backend PHP escucha sólo en loopback; Caddy le pasa las peticiones.
@@ -19,7 +24,7 @@ https://localhost {
 
     # Cabeceras de seguridad (se afinan en la ETAPA 2).
     header {
-        Strict-Transport-Security "max-age=31536000"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "no-referrer"
